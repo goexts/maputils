@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-/*CustomHeader xml header*/
+//CustomHeader xml header
 const CustomHeader = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
 
-/*String String */
+//String String
 type String string
 
 // ErrNilMap ...
@@ -24,12 +24,12 @@ func init() {
 	structs.DefaultTagName = "map"
 }
 
-/*String String */
+//String String
 func (s String) String() string {
 	return string(s)
 }
 
-/*ToString ToString */
+//ToString ToString
 func ToString(s string) String {
 	return String(s)
 }
@@ -37,7 +37,7 @@ func ToString(s string) String {
 // Map ...
 type Map map[string]interface{}
 
-/*String transfer map to JSON string */
+//String transfer map to JSON string
 func (m Map) String() string {
 	toJSON, err := m.ToJSON()
 	if err != nil {
@@ -56,7 +56,7 @@ func New() Map {
 	return make(Map)
 }
 
-/*ToMap transfer to map[string]interface{} or MapAble to GMap  */
+//ToMap transfer to map[string]interface{} or MapAble to GMap
 func ToMap(p interface{}) Map {
 	switch v := p.(type) {
 	case map[string]interface{}:
@@ -84,7 +84,7 @@ func Merge(maps ...Map) Map {
 	return target
 }
 
-/*Set set interface */
+//Set set interface
 func (m Map) Set(key string, v interface{}) Map {
 	return m.SetPath(strings.Split(key, "."), v)
 }
@@ -115,7 +115,7 @@ func (m Map) SetPath(keys []string, v interface{}) Map {
 	return m
 }
 
-/*SetNil set value if the key is not exist */
+//SetNil set value, if the key is not exist
 func (m Map) SetNil(s string, v interface{}) Map {
 	if !m.Has(s) {
 		m.Set(s, v)
@@ -123,28 +123,28 @@ func (m Map) SetNil(s string, v interface{}) Map {
 	return m
 }
 
-/*ReplaceExist replace interface if key is exist */
-func (m Map) ReplaceExist(s string, v interface{}) Map {
+//Replace replace will set value, if the key is exist
+func (m Map) Replace(s string, v interface{}) Map {
 	if m.Has(s) {
 		m.Set(s, v)
 	}
 	return m
 }
 
-/*ReplaceMap replace value from source map if key is exist */
-func (m Map) ReplaceMap(s string, v Map) Map {
+//ReplaceFromMap replace will set value from other map, if the key is exist from the both map
+func (m Map) ReplaceFromMap(s string, v Map) Map {
 	if m.Has(s) {
 		m.Set(s, v[s])
 	}
 	return m
 }
 
-/*Get get interface from map with out default */
+//Get get interface from map with out default
 func (m Map) Get(key string) interface{} {
 	return m.GetD(key, "")
 }
 
-/*GetD get interface from map with default */
+//GetD get interface from map with default
 func (m Map) GetD(s string, d interface{}) interface{} {
 	if s == "" {
 		return nil
@@ -155,12 +155,12 @@ func (m Map) GetD(s string, d interface{}) interface{} {
 	return d
 }
 
-/*GetMap get map from map with out default */
+//GetMap get map from map with out default
 func (m Map) GetMap(s string) Map {
 	return m.GetMapD(s, nil)
 }
 
-/*GetMapD get map from map with default */
+//GetMapD get map from map with default
 func (m Map) GetMapD(s string, d Map) Map {
 	switch v := m.Get(s).(type) {
 	case map[string]interface{}:
@@ -172,13 +172,13 @@ func (m Map) GetMapD(s string, d Map) Map {
 	return d
 }
 
-/*GetMapArray get map from map with out default */
+//GetMapArray get map from map with out default
 func (m Map) GetMapArray(s string) []Map {
 	return m.GetMapArrayD(s, nil)
 
 }
 
-/*GetMapArrayD get map from map with default */
+//GetMapArrayD get map from map with default
 func (m Map) GetMapArrayD(s string, d []Map) []Map {
 	switch v := m.Get(s).(type) {
 	case []Map:
@@ -194,13 +194,13 @@ func (m Map) GetMapArrayD(s string, d []Map) []Map {
 	return d
 }
 
-// GetArray ...
+// GetArray get []interface value with out default
 func (m Map) GetArray(s string) []interface{} {
 	return m.GetArrayD(s, nil)
 
 }
 
-// GetArrayD ...
+// GetArrayD get []interface value with default
 func (m Map) GetArrayD(s string, d []interface{}) []interface{} {
 	switch v := m.Get(s).(type) {
 	case []interface{}:
@@ -210,12 +210,12 @@ func (m Map) GetArrayD(s string, d []interface{}) []interface{} {
 	return d
 }
 
-/*GetBool get bool from map with out default */
+//GetBool get bool from map with out default
 func (m Map) GetBool(s string) bool {
 	return m.GetBoolD(s, false)
 }
 
-/*GetBoolD get bool from map with default */
+//GetBoolD get bool from map with default
 func (m Map) GetBoolD(s string, b bool) bool {
 	if v, b := m.Get(s).(bool); b {
 		return v
@@ -223,12 +223,12 @@ func (m Map) GetBoolD(s string, b bool) bool {
 	return b
 }
 
-/*GetNumber get float64 from map with out default */
+//GetNumber get float64 from map with out default
 func (m Map) GetNumber(s string) (float64, bool) {
 	return ParseNumber(m.Get(s))
 }
 
-/*GetNumberD get float64 from map with default */
+//GetNumberD get float64 from map with default
 func (m Map) GetNumberD(s string, d float64) float64 {
 	n, b := ParseNumber(m.Get(s))
 	if b {
@@ -237,12 +237,12 @@ func (m Map) GetNumberD(s string, d float64) float64 {
 	return d
 }
 
-/*GetInt64 get int64 from map with out default */
+//GetInt64 get int64 from map with out default
 func (m Map) GetInt64(s string) (int64, bool) {
 	return ParseInt(m.Get(s))
 }
 
-/*GetInt64D get int64 from map with default */
+//GetInt64D get int64 from map with default
 func (m Map) GetInt64D(s string, d int64) int64 {
 	i, b := ParseInt(m.Get(s))
 	if b {
@@ -251,12 +251,12 @@ func (m Map) GetInt64D(s string, d int64) int64 {
 	return d
 }
 
-/*GetString get string from map with out default */
+//GetString get string from map with out default
 func (m Map) GetString(s string) string {
 	return m.GetStringD(s, "")
 }
 
-/*GetStringD get string from map with default */
+//GetStringD get string from map with default
 func (m Map) GetStringD(s string, d string) string {
 	if v, b := m.Get(s).(string); b {
 		return v
@@ -264,12 +264,12 @@ func (m Map) GetStringD(s string, d string) string {
 	return d
 }
 
-/*GetStringArray get string from map with out default */
+//GetStringArray get string from map with out default
 func (m Map) GetStringArray(s string) []string {
 	return m.GetStringArrayD(s, []string{})
 }
 
-/*GetStringD get string from map with default */
+//GetStringD get string from map with default
 func (m Map) GetStringArrayD(s string, d []string) []string {
 	if v, b := m.Get(s).([]string); b {
 		return v
@@ -277,13 +277,13 @@ func (m Map) GetStringArrayD(s string, d []string) []string {
 	return d
 }
 
-/*GetBytes get bytes from map with default */
+//GetBytes get bytes from map with default
 func (m Map) GetBytes(s string) []byte {
 	return m.GetBytesD(s, nil)
 
 }
 
-/*GetBytesD get bytes from map with default */
+//GetBytesD get bytes from map with default
 func (m Map) GetBytesD(s string, d []byte) []byte {
 	if v, b := m.Get(s).([]byte); b {
 		return v
@@ -291,7 +291,7 @@ func (m Map) GetBytesD(s string, d []byte) []byte {
 	return d
 }
 
-/*Delete delete if exist */
+//Delete delete key value if key is exist
 func (m Map) Delete(key string) bool {
 	if key == "" {
 		return false
@@ -299,7 +299,7 @@ func (m Map) Delete(key string) bool {
 	return m.DeletePath(strings.Split(key, "."))
 }
 
-// DeletePath ...
+// DeletePath delete keys value if keys is exist
 func (m Map) DeletePath(keys []string) bool {
 	if len(keys) == 0 {
 		return false
@@ -330,7 +330,7 @@ func (m Map) DeletePath(keys []string) bool {
 	return true
 }
 
-/*Has check if key exist */
+//Has check if key exist
 func (m Map) Has(key string) bool {
 	if key == "" {
 		return false
@@ -376,7 +376,7 @@ func (m Map) GetPath(keys []string) interface{} {
 	return nil
 }
 
-/*SortKeys 排列key */
+//SortKeys 排列key
 func (m Map) SortKeys() []string {
 	var keys sort.StringSlice
 	for k := range m {
@@ -386,23 +386,23 @@ func (m Map) SortKeys() []string {
 	return keys
 }
 
-/*ToXML transfer map to XML */
+//ToXML transfer map to XML
 func (m Map) ToXML() ([]byte, error) {
 	return mapToXML(m, true)
 }
 
-/*ParseXML parse XML bytes to map */
+//ParseXML parse XML bytes to map
 func (m Map) ParseXML(b []byte) error {
 	return xmlToMap(m, b, true)
 }
 
-/*ToJSON transfer map to JSON */
+//ToJSON transfer map to JSON
 func (m Map) ToJSON() (v []byte, err error) {
 	v, err = json.Marshal(m)
 	return
 }
 
-/*ParseJSON parse JSON bytes to map */
+//ParseJSON parse JSON bytes to map
 func (m Map) ParseJSON(b []byte) error {
 	return json.Unmarshal(b, m)
 }
@@ -433,17 +433,17 @@ func (m Map) join(source Map, replace bool) Map {
 	return m
 }
 
-/*ReplaceJoin insert map s to m with replace */
+//ReplaceJoin insert map s to m with replace
 func (m Map) ReplaceJoin(s Map) Map {
 	return m.join(s, true)
 }
 
-/*Join insert map s to m with out replace */
+//Join insert map s to m with out replace
 func (m Map) Join(s Map) Map {
 	return m.join(s, false)
 }
 
-/*Only get map with keys */
+//Only get map with keys
 func (m Map) Only(keys []string) Map {
 	p := Map{}
 	size := len(keys)
@@ -454,7 +454,7 @@ func (m Map) Only(keys []string) Map {
 	return p
 }
 
-/*Expect get map expect keys */
+//Expect get map expect keys
 func (m Map) Expect(keys []string) Map {
 	p := m.Clone()
 	size := len(keys)
@@ -464,7 +464,7 @@ func (m Map) Expect(keys []string) Map {
 	return p
 }
 
-/*Clone copy a map */
+//Clone copy a map
 func (m Map) Clone() Map {
 	v := deepCopy(m)
 	return (v).(Map)
@@ -520,7 +520,7 @@ func (m Map) ToMap() Map {
 	return m
 }
 
-/*ToEncodeURL transfer map to url encode */
+//ToEncodeURL transfer map to url encode
 func (m Map) ToEncodeURL() string {
 	var buf strings.Builder
 	keys := m.SortKeys()

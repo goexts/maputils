@@ -24,7 +24,7 @@ type Stringer interface {
 	String() string
 }
 
-/*ParseNumber parse interface to number */
+//ParseNumber parse interface to number
 func ParseNumber(v interface{}) (float64, bool) {
 	switch v0 := v.(type) {
 	case float64:
@@ -35,7 +35,7 @@ func ParseNumber(v interface{}) (float64, bool) {
 	return 0, false
 }
 
-/*ParseInt parse interface to int64 */
+//ParseInt parse interface to int64
 func ParseInt(v interface{}) (int64, bool) {
 	switch v0 := v.(type) {
 	case int:
@@ -59,7 +59,7 @@ func ParseInt(v interface{}) (int64, bool) {
 	return 0, false
 }
 
-/*ParseString parse interface to string */
+//ParseString parse interface to string
 func ParseString(v interface{}) (string, bool) {
 	switch v0 := v.(type) {
 	case string:

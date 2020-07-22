@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-/*CDATA xml cdata defines */
+//CDATA xml cdata defines
 type CDATA struct {
 	XMLName xml.Name
 	Value   string `xml:",cdata"`
