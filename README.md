@@ -1,8 +1,8 @@
 # map
 
-## this is a map extension package
-## you can use it transfers a map to xmp or to json or to struct, you can use it for transfer map<=>struct<=>xml
-## its implements the sub map value edit , you can use "." to edit the sub map
+## this is a map extension package ##
+ you can use it transfers a map to xmp or to json or to struct, you can use it for transfer map<=>struct<=>xml 
+ its implements the sub map value edit , you can use "." to edit the sub map 
 
 ```go
     //create a map
