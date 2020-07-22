@@ -30,7 +30,16 @@
     //get the map copy with deep copy
     v.Clone()
 
+    //copy the value from m to v
+    v.Join(m)
+
+    //transfer the map to map[string]interface
+    v.ToGoMap()
+
     //merge all values from v to m
     Merge(m,v)
+    
+    //transfer the struct to map
+    StructToMap(&strcut{/*your strcut*/})
 
 ```
