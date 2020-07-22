@@ -404,7 +404,7 @@ func (m Map) ToJSON() (v []byte, err error) {
 
 //ParseJSON parse JSON bytes to map
 func (m Map) ParseJSON(b []byte) error {
-	return json.Unmarshal(b, m)
+	return json.Unmarshal(b, &m)
 }
 
 // Append append source map to target map;
