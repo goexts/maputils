@@ -42,4 +42,18 @@
     //transfer the struct to map
     StructToMap(&strcut{/*your strcut*/})
 
+    type Struct1 struct{
+        Value string 
+}           
+    type Struct2 struct {
+        S1 Struct1
+}
+
+    exampleWithSubMap := StructToMap(&Struct2{})
+    //to get the Value
+    exampleWithSubMap.GetString("S1.Value")
+
+
+
+
 ```
