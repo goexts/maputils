@@ -1,47 +1,18 @@
 package extmap
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"github.com/fatih/structs"
 	"github.com/mitchellh/mapstructure"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 )
 
 /*CustomHeader xml header*/
 const CustomHeader = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
-
-// Mapper ...
-type Mapper interface {
-	Map() Map
-}
-
-// XMLer ...
-type XMLer interface {
-	XML() []byte
-}
-
-// JSONer ...
-type JSONer interface {
-	JSON() []byte
-}
-
-// Stringer ...
-type Stringer interface {
-	String() string
-}
-
-/*CDATA xml cdata defines */
-type CDATA struct {
-	XMLName xml.Name
-	Value   string `xml:",cdata"`
-}
 
 /*String String */
 type String string
@@ -68,7 +39,11 @@ type Map map[string]interface{}
 
 /*String transfer map to JSON string */
 func (m Map) String() string {
-	return string(m.JSON())
+	toJSON, err := m.ToJSON()
+	if err != nil {
+		return ""
+	}
+	return string(toJSON)
 }
 
 // StructToMap ...
@@ -87,23 +62,23 @@ func ToMap(p interface{}) Map {
 	case map[string]interface{}:
 		return v
 	case Mapper:
-		return v.Map()
+		return v.ToMap()
 	}
 	return nil
 }
 
-// Struct ...
-func (m Map) Struct(v interface{}) (e error) {
+// ToStruct transfer Map to struct
+func (m Map) ToStruct(v interface{}) (e error) {
 	return mapstructure.Decode(m, v)
 }
 
-// MergeMaps ...
-func MergeMaps(target Map, sources ...Map) Map {
-	if sources == nil {
+// Merge marge all maps to target Map, the newer value will replace the older value
+func Merge(maps ...Map) Map {
+	target := New()
+	if maps == nil {
 		return target
 	}
-
-	for _, v := range sources {
+	for _, v := range maps {
 		target.join(v, true)
 	}
 	return target
@@ -140,8 +115,8 @@ func (m Map) SetPath(keys []string, v interface{}) Map {
 	return m
 }
 
-/*ReplaceNil replace interface if key is not exist */
-func (m Map) ReplaceNil(s string, v interface{}) Map {
+/*SetNil set value if the key is not exist */
+func (m Map) SetNil(s string, v interface{}) Map {
 	if !m.Has(s) {
 		m.Set(s, v)
 	}
@@ -279,12 +254,24 @@ func (m Map) GetInt64D(s string, d int64) int64 {
 /*GetString get string from map with out default */
 func (m Map) GetString(s string) string {
 	return m.GetStringD(s, "")
-
 }
 
 /*GetStringD get string from map with default */
 func (m Map) GetStringD(s string, d string) string {
 	if v, b := m.Get(s).(string); b {
+		return v
+	}
+	return d
+}
+
+/*GetStringArray get string from map with out default */
+func (m Map) GetStringArray(s string) []string {
+	return m.GetStringArrayD(s, []string{})
+}
+
+/*GetStringD get string from map with default */
+func (m Map) GetStringArrayD(s string, d []string) []string {
+	if v, b := m.Get(s).([]string); b {
 		return v
 	}
 	return d
@@ -382,7 +369,11 @@ func (m Map) GetPath(keys []string) interface{} {
 		}
 	}
 	// branch based on final node type
-	return subtree[keys[len(keys)-1]]
+	v, b := subtree[keys[len(keys)-1]]
+	if b {
+		return v
+	}
+	return nil
 }
 
 /*SortKeys 排列key */
@@ -395,88 +386,47 @@ func (m Map) SortKeys() []string {
 	return keys
 }
 
-/*XML transfer map to XML */
-func (m Map) XML() []byte {
-	v, e := xml.Marshal(&m)
-	if e != nil {
-		panic("map to xml error")
-	}
-	return v
+/*ToXML transfer map to XML */
+func (m Map) ToXML() ([]byte, error) {
+	return mapToXML(m, true)
 }
 
 /*ParseXML parse XML bytes to map */
-func (m Map) ParseXML(b []byte) {
-	toMap, err := xmlToMap(b, true)
-	if err != nil {
-		return
-	}
-	m.Join(toMap)
+func (m Map) ParseXML(b []byte) error {
+	return xmlToMap(m, b, true)
 }
 
-/*JSON transfer map to JSON */
-func (m Map) JSON() []byte {
-	v, e := json.Marshal(m)
-	if e != nil {
-		panic("map to json error")
-	}
-	return v
+/*ToJSON transfer map to JSON */
+func (m Map) ToJSON() (v []byte, err error) {
+	v, err = json.Marshal(m)
+	return
 }
 
 /*ParseJSON parse JSON bytes to map */
-func (m Map) ParseJSON(b []byte) Map {
-	tmp := Map{}
-	if e := json.Unmarshal(b, &tmp); e == nil {
-		m.join(tmp, true)
-	}
-	return m
+func (m Map) ParseJSON(b []byte) error {
+	return json.Unmarshal(b, m)
 }
 
-/*URLEncode transfer map to url encode */
-func (m Map) URLEncode() string {
-	var buf strings.Builder
-	keys := m.SortKeys()
-	size := len(keys)
-	for i := 0; i < size; i++ {
-		vs := m[keys[i]]
-		keyEscaped := url.QueryEscape(keys[i])
-		switch val := vs.(type) {
-		case string:
-			if buf.Len() > 0 {
-				buf.WriteByte('&')
-			}
-			buf.WriteString(keyEscaped)
-			buf.WriteByte('=')
-			buf.WriteString(url.QueryEscape(val))
-		case []string:
-			for _, v := range val {
-				if buf.Len() > 0 {
-					buf.WriteByte('&')
-				}
-				buf.WriteString(keyEscaped)
-				buf.WriteByte('=')
-				buf.WriteString(url.QueryEscape(v))
+// Append append source map to target map;
+// if the key value is exist and it is a []interface value, this will append into it
+// otherwise, it will replace the value
+func (m Map) Append(p Map) Map {
+	for k, v := range p {
+		if vget := m.Get(k); vget != nil {
+			if vvget, b := vget.([]interface{}); b {
+				vvget = append(vvget, v)
+				m.Set(k, vvget)
+				continue
 			}
 		}
+		m.Set(k, v)
 	}
-
-	return buf.String()
+	return m
 }
 
 func (m Map) join(source Map, replace bool) Map {
 	for k, v := range source {
 		if replace || !m.Has(k) {
-			m.Set(k, v)
-		}
-	}
-	return m
-}
-
-// Append ...
-func (m Map) Append(p Map) Map {
-	for k, v := range p {
-		if m.Has(k) {
-			m.Set(k, []interface{}{m.Get(k), v})
-		} else {
 			m.Set(k, v)
 		}
 	}
@@ -511,7 +461,6 @@ func (m Map) Expect(keys []string) Map {
 	for i := 0; i < size; i++ {
 		p.Delete(keys[i])
 	}
-
 	return p
 }
 
@@ -561,14 +510,45 @@ func (m Map) Check(s ...string) int {
 	return -1
 }
 
-// GoMap trans return a map[string]interface from Map
-func (m Map) GoMap() map[string]interface{} {
+// ToGoMap trans return a map[string]interface from Map
+func (m Map) ToGoMap() map[string]interface{} {
 	return m
 }
 
-// ToMap implements MapAble
+// ToMap implements MapAble by self
 func (m Map) ToMap() Map {
 	return m
+}
+
+/*ToEncodeURL transfer map to url encode */
+func (m Map) ToEncodeURL() string {
+	var buf strings.Builder
+	keys := m.SortKeys()
+	size := len(keys)
+	for i := 0; i < size; i++ {
+		vs := m[keys[i]]
+		keyEscaped := url.QueryEscape(keys[i])
+		switch val := vs.(type) {
+		case string:
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(keyEscaped)
+			buf.WriteByte('=')
+			buf.WriteString(url.QueryEscape(val))
+		case []string:
+			for _, v := range val {
+				if buf.Len() > 0 {
+					buf.WriteByte('&')
+				}
+				buf.WriteString(keyEscaped)
+				buf.WriteByte('=')
+				buf.WriteString(url.QueryEscape(v))
+			}
+		}
+	}
+
+	return buf.String()
 }
 
 // MarshalXML ...
@@ -588,225 +568,4 @@ func (m Map) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return unmarshalXML(m, d, xml.StartElement{Name: xml.Name{Local: "root"}}, false)
 	}
 	return unmarshalXML(m, d, xml.StartElement{Name: xml.Name{Local: "xml"}}, false)
-}
-
-func marshalXML(maps Map, e *xml.Encoder, start xml.StartElement) error {
-	if maps == nil {
-		return errors.New("map is nil")
-	}
-	err := e.EncodeToken(start)
-	if err != nil {
-		return err
-	}
-	for k, v := range maps {
-		err := convertXML(k, v, e, xml.StartElement{Name: xml.Name{Local: k}})
-		if err != nil {
-			return err
-		}
-	}
-	return e.EncodeToken(start.End())
-}
-
-func unmarshalXML(maps Map, d *xml.Decoder, start xml.StartElement, needCast bool) error {
-	current := ""
-	var data interface{}
-	last := ""
-	arrayTmp := make(Map)
-	arrayTag := ""
-	var ele []string
-
-	for t, err := d.Token(); err == nil; t, err = d.Token() {
-		switch token := t.(type) {
-		case xml.StartElement:
-			if strings.ToLower(token.Name.Local) == "xml" ||
-				strings.ToLower(token.Name.Local) == "root" {
-				continue
-			}
-			ele = append(ele, token.Name.Local)
-			current = strings.Join(ele, ".")
-			if current == last {
-				arrayTag = current
-				tmp := maps.Get(arrayTag)
-				switch tmp.(type) {
-				case []interface{}:
-					arrayTmp.Set(arrayTag, tmp)
-				default:
-					arrayTmp.Set(arrayTag, []interface{}{tmp})
-				}
-				maps.Delete(arrayTag)
-			}
-		case xml.EndElement:
-			name := token.Name.Local
-			if strings.ToLower(name) == "xml" ||
-				strings.ToLower(name) == "root" {
-				break
-			}
-			last = strings.Join(ele, ".")
-			if current == last {
-				if data != nil {
-					maps.Set(current, data)
-				} else {
-				}
-				data = nil
-			}
-			if last == arrayTag {
-				arr := arrayTmp.GetArray(arrayTag)
-				if arr != nil {
-					if v := maps.Get(arrayTag); v != nil {
-						maps.Set(arrayTag, append(arr, v))
-					} else {
-						maps.Set(arrayTag, arr)
-					}
-				} else {
-					//exception doing
-					maps.Set(arrayTag, []interface{}{maps.Get(arrayTag)})
-				}
-				arrayTmp.Delete(arrayTag)
-				arrayTag = ""
-			}
-
-			ele = ele[:len(ele)-1]
-		case xml.CharData:
-			if needCast {
-				data, err = strconv.Atoi(string(token))
-				if err == nil {
-					continue
-				}
-
-				data, err = strconv.ParseFloat(string(token), 64)
-				if err == nil {
-					continue
-				}
-
-				data, err = strconv.ParseBool(string(token))
-				if err == nil {
-					continue
-				}
-			}
-
-			data = string(token)
-		default:
-		}
-
-	}
-
-	return nil
-}
-
-func convertXML(k string, v interface{}, e *xml.Encoder, start xml.StartElement) error {
-	var err error
-	switch v1 := v.(type) {
-	case Map:
-		return marshalXML(v1, e, xml.StartElement{Name: xml.Name{Local: k}})
-	case map[string]interface{}:
-		return marshalXML(v1, e, xml.StartElement{Name: xml.Name{Local: k}})
-	case string:
-		if _, err := strconv.ParseInt(v1, 10, 0); err != nil {
-			err = e.EncodeElement(
-				CDATA{Value: v1}, xml.StartElement{Name: xml.Name{Local: k}})
-			return err
-		}
-		err = e.EncodeElement(v1, xml.StartElement{Name: xml.Name{Local: k}})
-		return err
-	case float64:
-		if v1 == float64(int64(v1)) {
-			err = e.EncodeElement(int64(v1), xml.StartElement{Name: xml.Name{Local: k}})
-			return err
-		}
-		err = e.EncodeElement(v1, xml.StartElement{Name: xml.Name{Local: k}})
-		return err
-	case bool:
-		err = e.EncodeElement(v1, xml.StartElement{Name: xml.Name{Local: k}})
-		return err
-	case []interface{}:
-		size := len(v1)
-		for i := 0; i < size; i++ {
-			err := convertXML(k, v1[i], e, xml.StartElement{Name: xml.Name{Local: k}})
-			if err != nil {
-				return err
-			}
-		}
-		//add a null string to []
-		if size == 1 {
-			return convertXML(k, "", e, xml.StartElement{Name: xml.Name{Local: k}})
-		}
-	default:
-	}
-	return nil
-}
-func mapToXML(maps Map, needHeader bool) ([]byte, error) {
-	buff := bytes.NewBuffer([]byte(CustomHeader))
-	if needHeader {
-		buff.Write([]byte(xml.Header))
-	}
-
-	enc := xml.NewEncoder(buff)
-	err := marshalXML(maps, enc, xml.StartElement{Name: xml.Name{Local: "xml"}})
-	if err != nil {
-		return nil, err
-	}
-	err = enc.Flush()
-	if err != nil {
-		return nil, err
-	}
-	return buff.Bytes(), nil
-}
-func xmlToMap(contentXML []byte, hasHeader bool) (Map, error) {
-	m := make(Map)
-	dec := xml.NewDecoder(bytes.NewReader(contentXML))
-	err := unmarshalXML(m, dec, xml.StartElement{Name: xml.Name{Local: "xml"}}, true)
-	if err != nil {
-		return nil, fmt.Errorf("xml to map:%w", err)
-	}
-
-	return m, nil
-}
-
-/*ParseNumber parse interface to number */
-func ParseNumber(v interface{}) (float64, bool) {
-	switch v0 := v.(type) {
-	case float64:
-		return v0, true
-	case float32:
-		return float64(v0), true
-	}
-	return 0, false
-}
-
-/*ParseInt parse interface to int64 */
-func ParseInt(v interface{}) (int64, bool) {
-	switch v0 := v.(type) {
-	case int:
-		return int64(v0), true
-	case int32:
-		return int64(v0), true
-	case int64:
-		return int64(v0), true
-	case uint:
-		return int64(v0), true
-	case uint32:
-		return int64(v0), true
-	case uint64:
-		return int64(v0), true
-	case float64:
-		return int64(v0), true
-	case float32:
-		return int64(v0), true
-	default:
-	}
-	return 0, false
-}
-
-/*ParseString parse interface to string */
-func ParseString(v interface{}) (string, bool) {
-	switch v0 := v.(type) {
-	case string:
-		return v0, true
-	case []byte:
-		return string(v0), true
-	case bytes.Buffer:
-		return v0.String(), true
-	default:
-	}
-	return "", false
 }
