@@ -140,8 +140,14 @@ func (m Map) ReplaceFromMap(s string, v Map) Map {
 }
 
 //Get get interface from map with out default
-func (m Map) Get(key string) interface{} {
-	return m.GetD(key, "")
+func (m Map) Get(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	if v := m.GetPath(strings.Split(s, ".")); v != nil {
+		return v
+	}
+	return nil
 }
 
 //GetD get interface from map with default
