@@ -2,11 +2,6 @@ package extmap
 
 import "bytes"
 
-// Mapper ...
-type Mapper interface {
-	ToMap() Map
-}
-
 // XMLer ...
 type XMLer interface {
 	ParseXML([]byte) error

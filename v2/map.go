@@ -19,6 +19,7 @@ type String string
 
 // ErrNilMap ...
 var ErrNilMap = errors.New("nil map")
+var ErrUnsupportedType = errors.New("error unsupported type")
 
 func init() {
 	structs.DefaultTagName = "map"
@@ -34,11 +35,16 @@ func ToString(s string) String {
 	return String(s)
 }
 
+type Map interface {
+}
+
 // Map ...
-type Map map[string]interface{}
+type innerMap struct {
+	data map[interface{}]interface{}
+}
 
 //String transfer map to JSON string
-func (m Map) String() string {
+func (m innerMap) String() string {
 	toJSON, err := m.ToJSON()
 	if err != nil {
 		return ""
@@ -48,27 +54,28 @@ func (m Map) String() string {
 
 // StructToMap ...
 func StructToMap(s interface{}) Map {
-	return ToMap(structs.Map(s))
+	return ToExtMap(structs.Map(s))
 }
 
-// newStruct ...
+// New create a map interface
 func New() Map {
-	return make(Map)
+	return &innerMap{data: make(map[interface{}]interface{})}
 }
 
-//ToMap transfer to map[string]interface{} or MapAble to GMap
-func ToMap(p interface{}) Map {
+//ToExtMap transfer to map[string]interface{} or MapAble to GMap
+func ToExtMap(p interface{}) Map {
 	switch v := p.(type) {
-	case map[string]interface{}:
-		return v
-	case Mapper:
-		return v.ToMap()
+	case map[interface{}]interface{}:
+		return &innerMap{data: v}
+	//todo: add other type process
+	default:
+		panic(ErrUnsupportedType)
 	}
 	return nil
 }
 
 // ToStruct transfer Map to struct
-func (m Map) ToStruct(v interface{}) (e error) {
+func (m innerMap) ToStruct(v interface{}) (e error) {
 	return mapstructure.Decode(m, v)
 }
 
@@ -85,18 +92,18 @@ func Merge(maps ...Map) Map {
 }
 
 //Set set interface
-func (m Map) Set(key string, v interface{}) Map {
+func (m innerMap) Set(key string, v interface{}) Map {
 	return m.SetPath(strings.Split(key, "."), v)
 }
 
 // SetPath is the same as SetPath, but allows you to provide comment
 // information to the key, that will be reused by Marshal().
-func (m Map) SetPath(keys []string, v interface{}) Map {
-	subtree := m
+func (m innerMap) SetPath(keys []string, v interface{}) Map {
+	subtree := m.data
 	for _, intermediateKey := range keys[:len(keys)-1] {
 		nextTree, exists := subtree[intermediateKey]
 		if !exists {
-			nextTree = make(Map)
+			nextTree = make(map[interface{}]interface{})
 			subtree[intermediateKey] = nextTree // add newStruct element here
 		}
 		switch node := nextTree.(type) {
