@@ -36,15 +36,26 @@ func ToString(s string) String {
 }
 
 type Map interface {
+	Option() *Option
+	Set(k interface{}, v interface{}) Map
+	Get(s interface{}) interface{}
 }
 
 // Map ...
 type innerMap struct {
-	data map[interface{}]interface{}
+	data   map[interface{}]interface{}
+	option *Option
 }
 
-func newInnerMap() *innerMap {
-	return &innerMap{data: make(map[interface{}]interface{})}
+func (m innerMap) Option() *Option {
+	return m.option
+}
+
+func newInnerMap(op *Option) *innerMap {
+	return &innerMap{
+		data:   make(map[interface{}]interface{}),
+		option: op,
+	}
 }
 
 //String transfer map to JSON string
@@ -62,8 +73,12 @@ func StructToMap(s interface{}) Map {
 }
 
 // New create a map interface
-func New() Map {
-	return newInnerMap()
+func New(fns ...OptionFunc) Map {
+	op := defaultOption()
+	for _, fn := range fns {
+		fn(op)
+	}
+	return newInnerMap(op)
 }
 
 //ToExtMap transfer to map[string]interface{} or MapAble to GMap
@@ -85,7 +100,7 @@ func (m innerMap) ToStruct(v interface{}) (e error) {
 
 // Merge marge all maps to target Map, the newer value will replace the older value
 func Merge(maps ...Map) Map {
-	target := New()
+	target := newInnerMap(defaultOption())
 	if maps == nil {
 		return target
 	}
@@ -96,12 +111,22 @@ func Merge(maps ...Map) Map {
 }
 
 //Set set interface
-func (m innerMap) Set(key interface{}, v interface{}) Map {
-	strV, b := key.(string)
-	if !b {
-		panic("wrong type")
+func (m *innerMap) Set(key interface{}, v interface{}) Map {
+	if m.option.Split {
+		switch k := key.(type) {
+		case string:
+			return m.setString(k, v)
+		}
 	}
-	return m.SetPath(strings.Split(strV, "."), v)
+	return m.set(key, v)
+}
+
+func (m *innerMap) set(key interface{}, val interface{}) Map {
+	m.data[key] = val
+	return m
+}
+func (m *innerMap) setString(key interface{}, val interface{}) Map {
+	return m.SetPath(strings.Split(key.(string), "."), val)
 }
 
 // SetPath is the same as SetPath, but allows you to provide comment
@@ -149,7 +174,7 @@ func (m *innerMap) Replace(s string, v interface{}) Map {
 //ReplaceFromMap replace will set value from other map, if the key is exist from the both map
 func (m *innerMap) ReplaceFromMap(s string, v Map) Map {
 	if m.Has(s) {
-		m.Set(s, v[s])
+		m.Set(s, v.Get(s))
 	}
 	return m
 }
@@ -159,6 +184,7 @@ func (m *innerMap) Get(s interface{}) interface{} {
 	if s == "" {
 		return nil
 	}
+
 	if v := m.GetPath(strings.Split(s, ".")); v != nil {
 		return v
 	}
@@ -352,12 +378,24 @@ func (m *innerMap) DeletePath(keys []string) bool {
 }
 
 //Has check if key exist
-func (m *innerMap) Has(key string) bool {
+func (m *innerMap) Has(key interface{}) bool {
+	switch k := key.(type) {
+	case string:
+		return m.hasString(k)
+	default:
+		return m.has(key)
+	}
+}
+func (m innerMap) has(key interface{}) bool {
+	_, b := m.data[key]
+	return b
+}
+
+func (m innerMap) hasString(key string) bool {
 	if key == "" {
 		return false
 	}
 	return m.HasPath(strings.Split(key, "."))
-
 }
 
 // HasPath returns true if the given path of keys exists, false otherwise.
@@ -369,7 +407,7 @@ func (m *innerMap) HasPath(keys []string) bool {
 // If keys is of length zero, the current tree is returned.
 func (m *innerMap) GetPath(keys []string) interface{} {
 	if len(keys) == 0 {
-		return m
+		return nil
 	}
 	subtree := m
 	for _, intermediateKey := range keys[:len(keys)-1] {
@@ -446,7 +484,8 @@ func (m *innerMap) Append(p Map) Map {
 }
 
 func (m *innerMap) join(source Map, replace bool) Map {
-	for k, v := range source {
+	s := source.(*innerMap)
+	for k, v := range s.data {
 		if replace || !m.Has(k) {
 			m.Set(k, v)
 		}
@@ -465,8 +504,8 @@ func (m *innerMap) Join(s Map) Map {
 }
 
 //Only get map with keys
-func (m *innerMap) Only(keys []string) Map {
-	p := Map{}
+func (m *innerMap) Only(keys []interface{}) Map {
+	p := New()
 	size := len(keys)
 	for i := 0; i < size; i++ {
 		p.Set(keys[i], m.Get(keys[i]))
