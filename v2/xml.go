@@ -36,7 +36,7 @@ func unmarshalXML(maps Map, d *xml.Decoder, start xml.StartElement, needCast boo
 	current := ""
 	var data interface{}
 	last := ""
-	arrayTmp := make(Map)
+	arrayTmp := New()
 	arrayTag := ""
 	var ele []string
 

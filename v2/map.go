@@ -52,6 +52,10 @@ func (m innerMap) Option() *Option {
 }
 
 func newInnerMap(op *Option) *innerMap {
+	if op == nil {
+		op = defaultOption()
+	}
+
 	return &innerMap{
 		data:   make(map[interface{}]interface{}),
 		option: op,
@@ -146,7 +150,7 @@ func (m *innerMap) SetPath(keys []string, v interface{}) Map {
 			// go to most recent element
 			if len(node) == 0 {
 				// create element if it does not exist
-				subtree.data[intermediateKey] = append(node, newInnerMap())
+				subtree.data[intermediateKey] = append(node, newInnerMap(nil))
 			}
 			subtree = node[len(node)-1]
 		}
@@ -180,12 +184,21 @@ func (m *innerMap) ReplaceFromMap(s string, v Map) Map {
 }
 
 //Get get interface from map with out default
-func (m *innerMap) Get(s interface{}) interface{} {
-	if s == "" {
-		return nil
+func (m innerMap) Get(key interface{}) interface{} {
+	switch k := key.(type) {
+	case string:
+		return m.getString(k)
+	default:
+		return m.get(key)
 	}
+}
 
-	if v := m.GetPath(strings.Split(s, ".")); v != nil {
+func (m innerMap) get(k interface{}) interface{} {
+	return m.data[k]
+}
+
+func (m innerMap) getString(k string) interface{} {
+	if v := m.GetPath(strings.Split(k, ".")); v != nil {
 		return v
 	}
 	return nil
@@ -210,8 +223,10 @@ func (m *innerMap) GetMap(s string) Map {
 //GetMapD get map from map with default
 func (m *innerMap) GetMapD(s string, d Map) Map {
 	switch v := m.Get(s).(type) {
-	case map[string]interface{}:
-		return v
+	case map[interface{}]interface{}:
+		m := newInnerMap(nil)
+		m.data = v
+		return m
 	case Map:
 		return v
 	default:
@@ -230,10 +245,12 @@ func (m *innerMap) GetMapArrayD(s string, d []Map) []Map {
 	switch v := m.Get(s).(type) {
 	case []Map:
 		return v
-	case []map[string]interface{}:
+	case []map[interface{}]interface{}:
 		var sub []Map
 		for _, mp := range v {
-			sub = append(sub, mp)
+			m := newInnerMap(nil)
+			m.data = mp
+			sub = append(sub, m)
 		}
 		return sub
 	default:
@@ -348,32 +365,33 @@ func (m *innerMap) Delete(key string) bool {
 
 // DeletePath delete keys value if keys is exist
 func (m *innerMap) DeletePath(keys []string) bool {
-	if len(keys) == 0 {
-		return false
-	}
-	subtree := m
-	for _, intermediateKey := range keys[:len(keys)-1] {
-		value, exists := subtree[intermediateKey]
-		if !exists {
-			return false
-		}
-		switch node := value.(type) {
-		case Map:
-			subtree = node
-		case []Map:
-			if len(node) == 0 {
-				return false
-			}
-			subtree = node[len(node)-1]
-		default:
-			return false // cannot navigate through other node types
-		}
-	}
-	// branch based on final node type
-	if _, b := subtree[keys[len(keys)-1]]; !b {
-		return false
-	}
-	delete(subtree, keys[len(keys)-1])
+	panic("todo")
+	//if len(keys) == 0 {
+	//	return false
+	//}
+	//subtree := m
+	//for _, intermediateKey := range keys[:len(keys)-1] {
+	//	value, exists := subtree[intermediateKey]
+	//	if !exists {
+	//		return false
+	//	}
+	//	switch node := value.(type) {
+	//	case Map:
+	//		subtree = node
+	//	case []Map:
+	//		if len(node) == 0 {
+	//			return false
+	//		}
+	//		subtree = node[len(node)-1]
+	//	default:
+	//		return false // cannot navigate through other node types
+	//	}
+	//}
+	//// branch based on final node type
+	//if _, b := subtree[keys[len(keys)-1]]; !b {
+	//	return false
+	//}
+	//delete(subtree, keys[len(keys)-1])
 	return true
 }
 
@@ -406,33 +424,34 @@ func (m *innerMap) HasPath(keys []string) bool {
 // GetPath returns the element in the tree indicated by 'keys'.
 // If keys is of length zero, the current tree is returned.
 func (m *innerMap) GetPath(keys []string) interface{} {
-	if len(keys) == 0 {
-		return nil
-	}
-	subtree := m
-	for _, intermediateKey := range keys[:len(keys)-1] {
-		value, exists := subtree[intermediateKey]
-		if !exists {
-			return nil
-		}
-		switch node := value.(type) {
-		case Map:
-			subtree = node
-		case []Map:
-			if len(node) == 0 {
-				return nil
-			}
-			subtree = node[len(node)-1]
-		default:
-			return nil // cannot navigate through other node types
-		}
-	}
-	// branch based on final node type
-	v, b := subtree[keys[len(keys)-1]]
-	if b {
-		return v
-	}
-	return nil
+	panic("todo")
+	//if len(keys) == 0 {
+	//	return nil
+	//}
+	//subtree := m
+	//for _, intermediateKey := range keys[:len(keys)-1] {
+	//	value, exists := subtree[intermediateKey]
+	//	if !exists {
+	//		return nil
+	//	}
+	//	switch node := value.(type) {
+	//	case Map:
+	//		subtree = node
+	//	case []Map:
+	//		if len(node) == 0 {
+	//			return nil
+	//		}
+	//		subtree = node[len(node)-1]
+	//	default:
+	//		return nil // cannot navigate through other node types
+	//	}
+	//}
+	//// branch based on final node type
+	//v, b := subtree[keys[len(keys)-1]]
+	//if b {
+	//	return v
+	//}
+	//return nil
 }
 
 //SortKeys 排列key
@@ -470,17 +489,18 @@ func (m *innerMap) ParseJSON(b []byte) error {
 // if the key value is exist and it is a []interface value, this will append into it
 // otherwise, it will replace the value
 func (m *innerMap) Append(p Map) Map {
-	for k, v := range p {
-		if vget := m.Get(k); vget != nil {
-			if vvget, b := vget.([]interface{}); b {
-				vvget = append(vvget, v)
-				m.Set(k, vvget)
-				continue
-			}
-		}
-		m.Set(k, v)
-	}
-	return m
+	panic("todo")
+	//for k, v := range p {
+	//	if vget := m.Get(k); vget != nil {
+	//		if vvget, b := vget.([]interface{}); b {
+	//			vvget = append(vvget, v)
+	//			m.Set(k, vvget)
+	//			continue
+	//		}
+	//	}
+	//	m.Set(k, v)
+	//}
+	//return m
 }
 
 func (m *innerMap) join(source Map, replace bool) Map {
@@ -516,12 +536,13 @@ func (m *innerMap) Only(keys []interface{}) Map {
 
 //Expect get map expect keys
 func (m *innerMap) Expect(keys []string) Map {
-	p := m.Clone()
-	size := len(keys)
-	for i := 0; i < size; i++ {
-		p.Delete(keys[i])
-	}
-	return p
+	panic("todo")
+	//p := m.Clone()
+	//size := len(keys)
+	//for i := 0; i < size; i++ {
+	//	p.Delete(keys[i])
+	//}
+	//return p
 }
 
 //Clone copy a map
@@ -531,26 +552,27 @@ func (m *innerMap) Clone() Map {
 }
 
 func deepCopy(value interface{}) interface{} {
-	if valueMap, ok := value.(Map); ok {
-		newMap := make(Map)
-		for k, v := range valueMap {
-			newMap[k] = deepCopy(v)
-		}
-		return newMap
-	} else if valueSlice, ok := value.([]Map); ok {
-		newSlice := make([]interface{}, len(valueSlice))
-		for k, v := range valueSlice {
-			newSlice[k] = deepCopy(v)
-		}
-		return newSlice
-	}
-
-	return value
+	panic("todo")
+	//if valueMap, ok := value.(Map); ok {
+	//	newMap := make(Map)
+	//	for k, v := range valueMap {
+	//		newMap[k] = deepCopy(v)
+	//	}
+	//	return newMap
+	//} else if valueSlice, ok := value.([]Map); ok {
+	//	newSlice := make([]interface{}, len(valueSlice))
+	//	for k, v := range valueSlice {
+	//		newSlice[k] = deepCopy(v)
+	//	}
+	//	return newSlice
+	//}
+	//
+	//return value
 }
 
 //Range range all maps
-func (m *innerMap) Range(f func(key string, value interface{}) bool) {
-	for k, v := range m {
+func (m *innerMap) Range(f func(key interface{}, value interface{}) bool) {
+	for k, v := range m.data {
 		if !f(k, v) {
 			return
 		}
@@ -560,7 +582,7 @@ func (m *innerMap) Range(f func(key string, value interface{}) bool) {
 //Check check all input keys
 //return -1 if all is exist
 //return index when not found
-func (m *innerMap) Check(s ...string) int {
+func (m *innerMap) Check(s ...interface{}) int {
 	size := len(s)
 	for i := 0; i < size; i++ {
 		if !m.Has(s[i]) {
@@ -571,8 +593,8 @@ func (m *innerMap) Check(s ...string) int {
 }
 
 // ToGoMap trans return a map[string]interface from Map
-func (m *innerMap) ToGoMap() map[string]interface{} {
-	return m
+func (m *innerMap) ToGoMap() map[interface{}]interface{} {
+	return m.data
 }
 
 // ToMap implements MapAble by self
@@ -585,19 +607,20 @@ func (m *innerMap) ToEncodeURL() string {
 	var buf strings.Builder
 	keys := m.SortKeys()
 	size := len(keys)
+	var tmp interface{}
 	for i := 0; i < size; i++ {
-		vs := m[keys[i]]
+		tmp = m.get(keys[i])
 		keyEscaped := url.QueryEscape(keys[i])
-		switch val := vs.(type) {
+		switch v := tmp.(type) {
 		case string:
 			if buf.Len() > 0 {
 				buf.WriteByte('&')
 			}
 			buf.WriteString(keyEscaped)
 			buf.WriteByte('=')
-			buf.WriteString(url.QueryEscape(val))
+			buf.WriteString(url.QueryEscape(v))
 		case []string:
-			for _, v := range val {
+			for _, v := range v {
 				if buf.Len() > 0 {
 					buf.WriteByte('&')
 				}
