@@ -1,6 +1,8 @@
 package extmap
 
-import "bytes"
+import (
+	"bytes"
+)
 
 // XMLer ...
 type XMLer interface {
@@ -52,6 +54,10 @@ func ParseInt(v interface{}) (int64, bool) {
 	default:
 	}
 	return 0, false
+}
+
+func ParseInt64(v interface{}) (int64, bool) {
+	return ParseInt(v)
 }
 
 //ParseString parse interface to string
