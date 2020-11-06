@@ -48,7 +48,8 @@ type innerMap struct {
 }
 
 func (m innerMap) Option() *Option {
-	return m.option
+	op := *m.option
+	return &op
 }
 
 func newInnerMap(op *Option) *innerMap {
