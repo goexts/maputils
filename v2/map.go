@@ -2,17 +2,15 @@ package extmap
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"errors"
-	"github.com/fatih/structs"
-	"github.com/mitchellh/mapstructure"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
-)
 
-//CustomHeader xml header
-const CustomHeader = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+	"github.com/fatih/structs"
+	"github.com/mitchellh/mapstructure"
+)
 
 //String String
 type String string
@@ -37,8 +35,10 @@ func ToString(s string) String {
 
 type Map interface {
 	Option() *Option
+	Bind(v interface{}) (e error)
 	Set(k interface{}, v interface{}) Map
 	Get(s interface{}) interface{}
+	Range(f func(key interface{}, value interface{}) bool)
 }
 
 // Map ...
@@ -53,10 +53,6 @@ func (m innerMap) Option() *Option {
 }
 
 func newInnerMap(op *Option) *innerMap {
-	if op == nil {
-		op = defaultOption()
-	}
-
 	return &innerMap{
 		data:   make(map[interface{}]interface{}),
 		option: op,
@@ -95,6 +91,19 @@ func ToExtMap(p interface{}) Map {
 	default:
 		panic(ErrUnsupportedType)
 	}
+	return nil
+}
+
+func (m innerMap) Bind(v interface{}) (e error) {
+	switch n := v.(type) {
+	case struct{}:
+		return m.BindStruct(v)
+	default:
+		return &mapErr{v: fmt.Sprintf("%v", n)}
+	}
+}
+
+func (m innerMap) BindStruct(v interface{}) (e error) {
 	return nil
 }
 
@@ -465,16 +474,6 @@ func (m *innerMap) SortKeys() []string {
 	return keys
 }
 
-//ToXML transfer map to XML
-func (m *innerMap) ToXML() ([]byte, error) {
-	return mapToXML(m, true)
-}
-
-//ParseXML parse XML bytes to map
-func (m *innerMap) ParseXML(b []byte) error {
-	return xmlToMap(m, b, true)
-}
-
 //ToJSON transfer map to JSON
 func (m *innerMap) ToJSON() (v []byte, err error) {
 	v, err = json.Marshal(m)
@@ -635,21 +634,4 @@ func (m *innerMap) ToEncodeURL() string {
 	return buf.String()
 }
 
-// MarshalXML ...
-func (m *innerMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if m == nil {
-		return ErrNilMap
-	}
-	if start.Name.Local == "root" {
-		return marshalXML(m, e, xml.StartElement{Name: xml.Name{Local: "root"}})
-	}
-	return marshalXML(m, e, xml.StartElement{Name: xml.Name{Local: "xml"}})
-}
-
-// UnmarshalXML ...
-func (m *innerMap) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	if start.Name.Local == "root" {
-		return unmarshalXML(m, d, xml.StartElement{Name: xml.Name{Local: "root"}}, false)
-	}
-	return unmarshalXML(m, d, xml.StartElement{Name: xml.Name{Local: "xml"}}, false)
-}
+var _ Map = (*innerMap)(nil)
