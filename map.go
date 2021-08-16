@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"github.com/fatih/structs"
-	"github.com/mitchellh/mapstructure"
 	"net/url"
 	"sort"
 	"strings"
+
+	"github.com/fatih/structs"
+	"github.com/mitchellh/mapstructure"
 )
 
 //CustomHeader xml header
@@ -21,7 +22,7 @@ type String string
 var ErrNilMap = errors.New("nil map")
 
 func init() {
-	structs.DefaultTagName = "map"
+	//structs.DefaultTagName = "map"
 }
 
 //String String

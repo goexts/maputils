@@ -1,4 +1,4 @@
-module github.com/goextension/extmap
+module github.com/goextension/gomap
 
 go 1.13
 
