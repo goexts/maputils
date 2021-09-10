@@ -1,4 +1,4 @@
-package extmap
+package gomap
 
 import (
 	"bytes"
