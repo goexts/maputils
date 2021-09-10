@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -21,17 +22,16 @@ type String string
 // ErrNilMap ...
 var ErrNilMap = errors.New("nil map")
 
-func init() {
-	//structs.DefaultTagName = "map"
-}
-
 //String String
 func (s String) String() string {
 	return string(s)
 }
 
-//ToString ToString
-func ToString(s string) String {
+// ToString ...
+// @Description:
+// @param string
+// @return fmt.Stringer
+func ToString(s string) fmt.Stringer {
 	return String(s)
 }
 
@@ -85,9 +85,25 @@ func Merge(maps ...Map) Map {
 	return target
 }
 
-//Set set interface
+// Set ...
+// @Description: set interface
+// @receiver Map
+// @param string
+// @param interface{}
+// @return Map
 func (m Map) Set(key string, v interface{}) Map {
 	return m.SetPath(strings.Split(key, "."), v)
+}
+
+// AppendArray ...
+// @Description: append array interface to key
+// @receiver Map
+// @param string
+// @param ...interface{}
+// @return Map
+func (m Map) AppendArray(key string, v ...interface{}) Map {
+	source := m.GetArray(key)
+	return m.Set(key, append(source, v...))
 }
 
 // SetPath is the same as SetPath, but allows you to provide comment
@@ -140,7 +156,11 @@ func (m Map) ReplaceFromMap(s string, v Map) Map {
 	return m
 }
 
-//Get get interface from map with out default
+// Get ...
+// @Description: get interface from map without default
+// @receiver Map
+// @param string
+// @return interface{}
 func (m Map) Get(s string) interface{} {
 	if s == "" {
 		return nil
@@ -151,7 +171,12 @@ func (m Map) Get(s string) interface{} {
 	return nil
 }
 
-//GetD get interface from map with default
+// GetD ...
+// @Description: get interface from map with default
+// @receiver Map
+// @param string
+// @param interface{}
+// @return interface{}
 func (m Map) GetD(s string, d interface{}) interface{} {
 	if s == "" {
 		return nil
@@ -162,12 +187,21 @@ func (m Map) GetD(s string, d interface{}) interface{} {
 	return d
 }
 
-//GetMap get map from map with out default
+// GetMap ...
+// @Description: get map from map without default
+// @receiver Map
+// @param string
+// @return Map
 func (m Map) GetMap(s string) Map {
 	return m.GetMapD(s, nil)
 }
 
-//GetMapD get map from map with default
+// GetMapD ...
+// @Description: get map from map with default
+// @receiver Map
+// @param string
+// @param Map
+// @return Map
 func (m Map) GetMapD(s string, d Map) Map {
 	switch v := m.Get(s).(type) {
 	case map[string]interface{}:
@@ -185,7 +219,12 @@ func (m Map) GetMapArray(s string) []Map {
 
 }
 
-//GetMapArrayD get map from map with default
+// GetMapArrayD ...
+// @Description: get gomap from gomap with default
+// @receiver Map
+// @param string
+// @param []Map
+// @return []Map
 func (m Map) GetMapArrayD(s string, d []Map) []Map {
 	switch v := m.Get(s).(type) {
 	case []Map:
@@ -201,13 +240,22 @@ func (m Map) GetMapArrayD(s string, d []Map) []Map {
 	return d
 }
 
-// GetArray get []interface value with out default
+// GetArray ...
+// @Description:  get []interface value without default
+// @receiver Map
+// @param string
+// @return []interface{}
 func (m Map) GetArray(s string) []interface{} {
 	return m.GetArrayD(s, nil)
 
 }
 
-// GetArrayD get []interface value with default
+// GetArrayD ...
+// @Description: get []interface value with default
+// @receiver Map
+// @param string
+// @param []interface{}
+// @return []interface{}
 func (m Map) GetArrayD(s string, d []interface{}) []interface{} {
 	switch v := m.Get(s).(type) {
 	case []interface{}:
@@ -217,12 +265,21 @@ func (m Map) GetArrayD(s string, d []interface{}) []interface{} {
 	return d
 }
 
-//GetBool get bool from map with out default
+// GetBool ...
+// @Description:  get bool from map with out default
+// @receiver Map
+// @param string
+// @return bool
 func (m Map) GetBool(s string) bool {
 	return m.GetBoolD(s, false)
 }
 
-//GetBoolD get bool from map with default
+// GetBoolD ...
+// @Description: get bool from map with default
+// @receiver Map
+// @param string
+// @param bool
+// @return bool
 func (m Map) GetBoolD(s string, b bool) bool {
 	if v, b := m.Get(s).(bool); b {
 		return v
@@ -230,12 +287,22 @@ func (m Map) GetBoolD(s string, b bool) bool {
 	return b
 }
 
-//GetNumber get float64 from map with out default
+// GetNumber ...
+// @Description: get float64 from map with out default
+// @receiver Map
+// @param string
+// @return float64
+// @return bool
 func (m Map) GetNumber(s string) (float64, bool) {
 	return ParseNumber(m.Get(s))
 }
 
-//GetNumberD get float64 from map with default
+// GetNumberD ...
+// @Description: get float64 from map with default
+// @receiver Map
+// @param string
+// @param float64
+// @return float64
 func (m Map) GetNumberD(s string, d float64) float64 {
 	n, b := ParseNumber(m.Get(s))
 	if b {
@@ -244,12 +311,22 @@ func (m Map) GetNumberD(s string, d float64) float64 {
 	return d
 }
 
-//GetInt64 get int64 from map with out default
+// GetInt64 ...
+// @Description: get int64 from map with out default
+// @receiver Map
+// @param string
+// @return int64
+// @return bool
 func (m Map) GetInt64(s string) (int64, bool) {
 	return ParseInt(m.Get(s))
 }
 
-//GetInt64D get int64 from map with default
+// GetInt64D ...
+// @Description: get int64 from map with default
+// @receiver Map
+// @param string
+// @param int64
+// @return int64
 func (m Map) GetInt64D(s string, d int64) int64 {
 	i, b := ParseInt(m.Get(s))
 	if b {
@@ -258,12 +335,21 @@ func (m Map) GetInt64D(s string, d int64) int64 {
 	return d
 }
 
-//GetString get string from map with out default
+// GetString ...
+// @Description: get string from map with out default
+// @receiver Map
+// @param string
+// @return string
 func (m Map) GetString(s string) string {
 	return m.GetStringD(s, "")
 }
 
-//GetStringD get string from map with default
+// GetStringD ...
+// @Description: get string from map with default
+// @receiver Map
+// @param string
+// @param string
+// @return string
 func (m Map) GetStringD(s string, d string) string {
 	if v, b := m.Get(s).(string); b {
 		return v
@@ -271,12 +357,21 @@ func (m Map) GetStringD(s string, d string) string {
 	return d
 }
 
-//GetStringArray get string from map with out default
+// GetStringArray ...
+// @Description: get string from map without default
+// @receiver Map
+// @param string
+// @return []string
 func (m Map) GetStringArray(s string) []string {
 	return m.GetStringArrayD(s, []string{})
 }
 
-//GetStringD get string from map with default
+// GetStringArrayD ...
+// @Description: get string from map with default
+// @receiver Map
+// @param string
+// @param []string
+// @return []string
 func (m Map) GetStringArrayD(s string, d []string) []string {
 	if v, b := m.Get(s).([]string); b {
 		return v
@@ -284,13 +379,22 @@ func (m Map) GetStringArrayD(s string, d []string) []string {
 	return d
 }
 
-//GetBytes get bytes from map with default
+// GetBytes ...
+// @Description: get bytes from map with default
+// @receiver Map
+// @param string
+// @return []byte
 func (m Map) GetBytes(s string) []byte {
 	return m.GetBytesD(s, nil)
 
 }
 
-//GetBytesD get bytes from map with default
+// GetBytesD ...
+// @Description: get bytes from map with default
+// @receiver Map
+// @param string
+// @param []byte
+// @return []byte
 func (m Map) GetBytesD(s string, d []byte) []byte {
 	if v, b := m.Get(s).([]byte); b {
 		return v
@@ -298,7 +402,11 @@ func (m Map) GetBytesD(s string, d []byte) []byte {
 	return d
 }
 
-//Delete delete key value if key is exist
+// Delete ...
+// @Description:  delete key value if key is exist
+// @receiver Map
+// @param string
+// @return bool
 func (m Map) Delete(key string) bool {
 	if key == "" {
 		return false
