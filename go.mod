@@ -1,4 +1,4 @@
-module github.com/goextension/gomap
+module github.com/goexts/maputils
 
 go 1.13
 

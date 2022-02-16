@@ -1,6 +1,6 @@
-module github.com/goextension/extmap
+module github.com/goexts/maputils/v2
 
-go 1.13
+go 1.18
 
 require (
 	github.com/fatih/structs v1.1.0

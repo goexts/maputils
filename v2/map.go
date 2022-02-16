@@ -3,13 +3,11 @@ package extmap
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/fatih/structs"
-	"github.com/mitchellh/mapstructure"
 )
 
 //String String
@@ -33,60 +31,48 @@ func ToString(s string) String {
 	return String(s)
 }
 
-type Map interface {
-	Option() *Option
-	Bind(v interface{}) (e error)
-	Set(k interface{}, v interface{}) Map
-	Get(s interface{}) interface{}
-	Range(f func(key interface{}, value interface{}) bool)
+type Map struct {
+	setting *Setting
+	m       map[string]any
 }
 
-// Map ...
-type innerMap struct {
-	data   map[interface{}]interface{}
-	option *Option
+func (m Map) UnmarshalJSON(bytes []byte) error {
+	return json.Unmarshal(bytes, &m.m)
 }
 
-func (m innerMap) Option() *Option {
-	op := *m.option
-	return &op
+func (m Map) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.m)
 }
 
-func newInnerMap(op *Option) *innerMap {
-	return &innerMap{
-		data:   make(map[interface{}]interface{}),
-		option: op,
-	}
-}
-
-//String transfer map to JSON string
-func (m innerMap) String() string {
-	toJSON, err := m.ToJSON()
-	if err != nil {
-		return ""
-	}
-	return string(toJSON)
-}
-
-// StructToMap ...
-func StructToMap(s interface{}) Map {
-	return ToExtMap(structs.Map(s))
+func (m Map) String() string {
+	v, _ := m.MarshalJSON()
+	return string(v)
 }
 
 // New create a map interface
-func New(fns ...OptionFunc) Map {
-	op := defaultOption()
-	for _, fn := range fns {
-		fn(op)
+func New(ss ...SettingOption) *Map {
+	setting := defaultSetting()
+	for i := range ss {
+		ss[i](setting)
 	}
-	return newInnerMap(op)
+	return &Map{
+		setting: setting,
+		m:       make(map[string]any),
+	}
 }
 
-//ToExtMap transfer to map[string]interface{} or MapAble to GMap
-func ToExtMap(p interface{}) Map {
-	switch v := p.(type) {
-	case map[interface{}]interface{}:
-		return &innerMap{data: v}
+func newWithSetting(setting *Setting) *Map {
+	return &Map{
+		setting: setting,
+		m:       make(map[string]any),
+	}
+}
+
+//ToMap transfer to map[comparable]any to Map
+func ToMap(p any) *Map {
+	switch m := p.(type) {
+	case map[string]any:
+		return &Map{m: m}
 	//todo: add other type process
 	default:
 		panic(ErrUnsupportedType)
@@ -94,91 +80,75 @@ func ToExtMap(p interface{}) Map {
 	return nil
 }
 
-func (m innerMap) Bind(v interface{}) (e error) {
-	switch n := v.(type) {
-	case struct{}:
-		return m.BindStruct(v)
-	default:
-		return &mapErr{v: fmt.Sprintf("%v", n)}
-	}
-}
-
-func (m innerMap) BindStruct(v interface{}) (e error) {
-	return nil
-}
-
-// ToStruct transfer Map to struct
-func (m innerMap) ToStruct(v interface{}) (e error) {
-	return mapstructure.Decode(m, v)
-}
-
 // Merge marge all maps to target Map, the newer value will replace the older value
-func Merge(maps ...Map) Map {
-	target := newInnerMap(defaultOption())
-	if maps == nil {
-		return target
-	}
+func (m *Map) Merge(maps ...*Map) *Map {
 	for _, v := range maps {
-		target.join(v, true)
+		m.join(v, true)
 	}
-	return target
+	return m
 }
 
-//Set set interface
-func (m *innerMap) Set(key interface{}, v interface{}) Map {
-	if m.option.Split {
-		switch k := key.(type) {
-		case string:
-			return m.setString(k, v)
-		}
+//Set is a set interface
+func (m *Map) Set(key string, v any) *Map {
+	if m.setting.Split {
+		//switch k := key.(type) {
+		//case string:
+		return m.setString(key, v)
+		//}
 	}
 	return m.set(key, v)
 }
 
-func (m *innerMap) set(key interface{}, val interface{}) Map {
-	m.data[key] = val
+func (m *Map) set(key string, val any) *Map {
+	m.m[key] = val
 	return m
 }
-func (m *innerMap) setString(key interface{}, val interface{}) Map {
-	return m.SetPath(strings.Split(key.(string), "."), val)
+func (m *Map) setString(key string, val any) *Map {
+	return m.SetPath(strings.Split(key, "."), val)
+}
+
+func (m *Map) Query(key string) (any, error) {
+	return nil, nil
 }
 
 // SetPath is the same as SetPath, but allows you to provide comment
 // information to the key, that will be reused by Marshal().
-func (m *innerMap) SetPath(keys []string, v interface{}) Map {
+func (m *Map) SetPath(keys []string, v any) *Map {
 	subtree := m
 	for _, intermediateKey := range keys[:len(keys)-1] {
-		nextTree, exists := m.data[intermediateKey]
+		nextTree, exists := m.m[intermediateKey]
 		if !exists {
 			nextTree = New()
-			m.data[intermediateKey] = nextTree // add newStruct element here
+			m.m[intermediateKey] = nextTree // add newStruct element here
 		}
 		switch node := nextTree.(type) {
-		case *innerMap:
+		case *Map:
 			subtree = node
-		case []*innerMap:
+		case []*Map:
 			// go to most recent element
 			if len(node) == 0 {
 				// create element if it does not exist
-				subtree.data[intermediateKey] = append(node, newInnerMap(nil))
+				subtree.m[intermediateKey] = append(node, New(func(op *Setting) {
+					op = m.setting
+				}))
 			}
 			subtree = node[len(node)-1]
 		}
 	}
-	subtree.data[keys[len(keys)-1]] = v
+	subtree.m[keys[len(keys)-1]] = v
 	return m
 }
 
 //SetNil set value, if the key is not exist
-func (m *innerMap) SetNil(s string, v interface{}) Map {
-	if !m.Has(s) {
-		m.Set(s, v)
+func (m *Map) SetNil(key string, val any) *Map {
+	if !m.Has(key) {
+		m.Set(key, val)
 	}
 	return m
 }
 
 //Replace replace will set value, if the key is exist
-func (m *innerMap) Replace(s string, v interface{}) Map {
+func (m *Map) Replace(s string, v any) *Map {
 	if m.Has(s) {
 		m.Set(s, v)
 	}
@@ -186,28 +156,24 @@ func (m *innerMap) Replace(s string, v interface{}) Map {
 }
 
 //ReplaceFromMap replace will set value from other map, if the key is exist from the both map
-func (m *innerMap) ReplaceFromMap(s string, v Map) Map {
-	if m.Has(s) {
-		m.Set(s, v.Get(s))
+func (m *Map) ReplaceFromMap(key string, v *Map) *Map {
+	if m.Has(key) {
+		m.Set(key, v.Get(key))
 	}
 	return m
 }
 
 //Get get interface from map with out default
-func (m innerMap) Get(key interface{}) interface{} {
-	switch k := key.(type) {
-	case string:
-		return m.getString(k)
-	default:
-		return m.get(key)
-	}
+func (m Map) Get(key string) any {
+	return m.getString(key)
+
 }
 
-func (m innerMap) get(k interface{}) interface{} {
-	return m.data[k]
+func (m Map) get(k string) any {
+	return m.m[k]
 }
 
-func (m innerMap) getString(k string) interface{} {
+func (m Map) getString(k string) any {
 	if v := m.GetPath(strings.Split(k, ".")); v != nil {
 		return v
 	}
@@ -215,7 +181,7 @@ func (m innerMap) getString(k string) interface{} {
 }
 
 //GetD get interface from map with default
-func (m *innerMap) GetD(s string, d interface{}) interface{} {
+func (m *Map) GetD(s string, d any) any {
 	if s == "" {
 		return nil
 	}
@@ -226,18 +192,18 @@ func (m *innerMap) GetD(s string, d interface{}) interface{} {
 }
 
 //GetMap get map from map with out default
-func (m *innerMap) GetMap(s string) Map {
+func (m *Map) GetMap(s string) *Map {
 	return m.GetMapD(s, nil)
 }
 
 //GetMapD get map from map with default
-func (m *innerMap) GetMapD(s string, d Map) Map {
+func (m *Map) GetMapD(s string, d *Map) *Map {
 	switch v := m.Get(s).(type) {
-	case map[interface{}]interface{}:
-		m := newInnerMap(nil)
-		m.data = v
+	case map[string]any:
+		m := newWithSetting(m.setting)
+		m.m = v
 		return m
-	case Map:
+	case *Map:
 		return v
 	default:
 	}
@@ -245,21 +211,21 @@ func (m *innerMap) GetMapD(s string, d Map) Map {
 }
 
 //GetMapArray get map from map with out default
-func (m *innerMap) GetMapArray(s string) []Map {
+func (m *Map) GetMapArray(s string) []*Map {
 	return m.GetMapArrayD(s, nil)
 
 }
 
 //GetMapArrayD get map from map with default
-func (m *innerMap) GetMapArrayD(s string, d []Map) []Map {
+func (m *Map) GetMapArrayD(s string, d []*Map) []*Map {
 	switch v := m.Get(s).(type) {
-	case []Map:
+	case []*Map:
 		return v
-	case []map[interface{}]interface{}:
-		var sub []Map
+	case []map[string]any:
+		var sub []*Map
 		for _, mp := range v {
-			m := newInnerMap(nil)
-			m.data = mp
+			_map := newWithSetting(m.setting)
+			_map.m = mp
 			sub = append(sub, m)
 		}
 		return sub
@@ -269,15 +235,15 @@ func (m *innerMap) GetMapArrayD(s string, d []Map) []Map {
 }
 
 // GetArray get []interface value with out default
-func (m *innerMap) GetArray(s string) []interface{} {
+func (m *Map) GetArray(s string) []any {
 	return m.GetArrayD(s, nil)
 
 }
 
 // GetArrayD get []interface value with default
-func (m *innerMap) GetArrayD(s string, d []interface{}) []interface{} {
+func (m *Map) GetArrayD(s string, d []any) []any {
 	switch v := m.Get(s).(type) {
-	case []interface{}:
+	case []any:
 		return v
 	default:
 	}
@@ -285,12 +251,12 @@ func (m *innerMap) GetArrayD(s string, d []interface{}) []interface{} {
 }
 
 //GetBool get bool from map with out default
-func (m *innerMap) GetBool(s string) bool {
+func (m *Map) GetBool(s string) bool {
 	return m.GetBoolD(s, false)
 }
 
 //GetBoolD get bool from map with default
-func (m *innerMap) GetBoolD(s string, b bool) bool {
+func (m *Map) GetBoolD(s string, b bool) bool {
 	if v, b := m.Get(s).(bool); b {
 		return v
 	}
@@ -298,12 +264,12 @@ func (m *innerMap) GetBoolD(s string, b bool) bool {
 }
 
 //GetNumber get float64 from map with out default
-func (m *innerMap) GetNumber(s string) (float64, bool) {
+func (m *Map) GetNumber(s string) (float64, bool) {
 	return ParseNumber(m.Get(s))
 }
 
 //GetNumberD get float64 from map with default
-func (m *innerMap) GetNumberD(s string, d float64) float64 {
+func (m *Map) GetNumberD(s string, d float64) float64 {
 	n, b := ParseNumber(m.Get(s))
 	if b {
 		return n
@@ -312,12 +278,12 @@ func (m *innerMap) GetNumberD(s string, d float64) float64 {
 }
 
 //GetInt64 get int64 from map with out default
-func (m *innerMap) GetInt64(s string) (int64, bool) {
+func (m *Map) GetInt64(s string) (int64, bool) {
 	return ParseInt(m.Get(s))
 }
 
 //GetInt64D get int64 from map with default
-func (m *innerMap) GetInt64D(s string, d int64) int64 {
+func (m *Map) GetInt64D(s string, d int64) int64 {
 	i, b := ParseInt(m.Get(s))
 	if b {
 		return i
@@ -326,12 +292,12 @@ func (m *innerMap) GetInt64D(s string, d int64) int64 {
 }
 
 //GetString get string from map with out default
-func (m *innerMap) GetString(s string) string {
+func (m *Map) GetString(s string) string {
 	return m.GetStringD(s, "")
 }
 
 //GetStringD get string from map with default
-func (m *innerMap) GetStringD(s string, d string) string {
+func (m *Map) GetStringD(s string, d string) string {
 	if v, b := m.Get(s).(string); b {
 		return v
 	}
@@ -339,12 +305,12 @@ func (m *innerMap) GetStringD(s string, d string) string {
 }
 
 //GetStringArray get string from map with out default
-func (m *innerMap) GetStringArray(s string) []string {
+func (m *Map) GetStringArray(s string) []string {
 	return m.GetStringArrayD(s, []string{})
 }
 
 //GetStringD get string from map with default
-func (m *innerMap) GetStringArrayD(s string, d []string) []string {
+func (m *Map) GetStringArrayD(s string, d []string) []string {
 	if v, b := m.Get(s).([]string); b {
 		return v
 	}
@@ -352,13 +318,13 @@ func (m *innerMap) GetStringArrayD(s string, d []string) []string {
 }
 
 //GetBytes get bytes from map with default
-func (m *innerMap) GetBytes(s string) []byte {
+func (m *Map) GetBytes(s string) []byte {
 	return m.GetBytesD(s, nil)
 
 }
 
 //GetBytesD get bytes from map with default
-func (m *innerMap) GetBytesD(s string, d []byte) []byte {
+func (m *Map) GetBytesD(s string, d []byte) []byte {
 	if v, b := m.Get(s).([]byte); b {
 		return v
 	}
@@ -366,7 +332,7 @@ func (m *innerMap) GetBytesD(s string, d []byte) []byte {
 }
 
 //Delete delete key value if key is exist
-func (m *innerMap) Delete(key string) bool {
+func (m *Map) Delete(key string) bool {
 	if key == "" {
 		return false
 	}
@@ -374,7 +340,7 @@ func (m *innerMap) Delete(key string) bool {
 }
 
 // DeletePath delete keys value if keys is exist
-func (m *innerMap) DeletePath(keys []string) bool {
+func (m *Map) DeletePath(keys []string) bool {
 	panic("todo")
 	//if len(keys) == 0 {
 	//	return false
@@ -406,20 +372,20 @@ func (m *innerMap) DeletePath(keys []string) bool {
 }
 
 //Has check if key exist
-func (m *innerMap) Has(key interface{}) bool {
-	switch k := key.(type) {
-	case string:
-		return m.hasString(k)
-	default:
-		return m.has(key)
-	}
+func (m *Map) Has(key string) bool {
+	//switch k := key.(type) {
+	//case string:
+	return m.hasString(key)
+	//default:
+	//	return m.has(key)
+	//}
 }
-func (m innerMap) has(key interface{}) bool {
-	_, b := m.data[key]
+func (m Map) has(key string) bool {
+	_, b := m.m[key]
 	return b
 }
 
-func (m innerMap) hasString(key string) bool {
+func (m Map) hasString(key string) bool {
 	if key == "" {
 		return false
 	}
@@ -427,85 +393,82 @@ func (m innerMap) hasString(key string) bool {
 }
 
 // HasPath returns true if the given path of keys exists, false otherwise.
-func (m *innerMap) HasPath(keys []string) bool {
+func (m *Map) HasPath(keys []string) bool {
 	return m.GetPath(keys) != nil
 }
 
 // GetPath returns the element in the tree indicated by 'keys'.
 // If keys is of length zero, the current tree is returned.
-func (m *innerMap) GetPath(keys []string) interface{} {
-	panic("todo")
-	//if len(keys) == 0 {
-	//	return nil
-	//}
-	//subtree := m
-	//for _, intermediateKey := range keys[:len(keys)-1] {
-	//	value, exists := subtree[intermediateKey]
-	//	if !exists {
-	//		return nil
-	//	}
-	//	switch node := value.(type) {
-	//	case Map:
-	//		subtree = node
-	//	case []Map:
-	//		if len(node) == 0 {
-	//			return nil
-	//		}
-	//		subtree = node[len(node)-1]
-	//	default:
-	//		return nil // cannot navigate through other node types
-	//	}
-	//}
-	//// branch based on final node type
-	//v, b := subtree[keys[len(keys)-1]]
-	//if b {
-	//	return v
-	//}
-	//return nil
+func (m *Map) GetPath(keys []string) any {
+	if len(keys) == 0 {
+		return nil
+	}
+	subtree := m
+	for _, intermediateKey := range keys[:len(keys)-1] {
+		value, exists := subtree.m[intermediateKey]
+		if !exists {
+			return nil
+		}
+		switch node := value.(type) {
+		case *Map:
+			subtree = node
+		case []*Map:
+			if len(node) == 0 {
+				return nil
+			}
+			subtree = node[len(node)-1]
+		default:
+			return nil // cannot navigate through other node types
+		}
+	}
+	// branch based on final node type
+	v, b := subtree.m[keys[len(keys)-1]]
+	if b {
+		return v
+	}
+	return nil
 }
 
 //SortKeys 排列key
-func (m *innerMap) SortKeys() []string {
+func (m *Map) SortKeys() []string {
 	var keys sort.StringSlice
-	for k := range m.data {
-		keys = append(keys, k.(string))
+	for k := range m.m {
+		keys = append(keys, k)
 	}
 	sort.Sort(keys)
 	return keys
 }
 
 //ToJSON transfer map to JSON
-func (m *innerMap) ToJSON() (v []byte, err error) {
+func (m *Map) ToJSON() (v []byte, err error) {
 	v, err = json.Marshal(m)
 	return
 }
 
 //ParseJSON parse JSON bytes to map
-func (m *innerMap) ParseJSON(b []byte) error {
+func (m *Map) ParseJSON(b []byte) error {
 	return json.Unmarshal(b, &m)
 }
 
 // Append append source map to target map;
 // if the key value is exist and it is a []interface value, this will append into it
 // otherwise, it will replace the value
-func (m *innerMap) Append(p Map) Map {
-	panic("todo")
-	//for k, v := range p {
-	//	if vget := m.Get(k); vget != nil {
-	//		if vvget, b := vget.([]interface{}); b {
-	//			vvget = append(vvget, v)
-	//			m.Set(k, vvget)
-	//			continue
-	//		}
-	//	}
-	//	m.Set(k, v)
-	//}
-	//return m
+func (m *Map) Append(source *Map) *Map {
+	for k, v := range source.m {
+		if vget := m.Get(k); vget != nil {
+			if vvget, b := vget.([]any); b {
+				vvget = append(vvget, v)
+				m.Set(k, vvget)
+				continue
+			}
+		}
+		m.Set(k, v)
+	}
+	return m
 }
 
-func (m *innerMap) join(source Map, replace bool) Map {
-	s := source.(*innerMap)
-	for k, v := range s.data {
+func (m *Map) join(source *Map, replace bool) *Map {
+	for k, v := range source.m {
 		if replace || !m.Has(k) {
 			m.Set(k, v)
 		}
@@ -514,65 +477,65 @@ func (m *innerMap) join(source Map, replace bool) Map {
 }
 
 //ReplaceJoin insert map s to m with replace
-func (m *innerMap) ReplaceJoin(s Map) Map {
-	return m.join(s, true)
+func (m *Map) ReplaceJoin(source *Map) *Map {
+	return m.join(source, true)
 }
 
 //Join insert map s to m with out replace
-func (m *innerMap) Join(s Map) Map {
-	return m.join(s, false)
+func (m *Map) Join(source *Map) *Map {
+	return m.join(source, false)
 }
 
 //Only get map with keys
-func (m *innerMap) Only(keys []interface{}) Map {
-	p := New()
+func (m *Map) Only(keys []string) *Map {
+	_map := New(func(op *Setting) {
+		op = m.setting
+	})
 	size := len(keys)
 	for i := 0; i < size; i++ {
-		p.Set(keys[i], m.Get(keys[i]))
+		_map.Set(keys[i], m.Get(keys[i]))
 	}
 
-	return p
+	return _map
 }
 
 //Expect get map expect keys
-func (m *innerMap) Expect(keys []string) Map {
-	panic("todo")
-	//p := m.Clone()
-	//size := len(keys)
-	//for i := 0; i < size; i++ {
-	//	p.Delete(keys[i])
-	//}
-	//return p
+func (m *Map) Expect(keys []string) Map {
+	p := m.Clone()
+	size := len(keys)
+	for i := 0; i < size; i++ {
+		p.Delete(keys[i])
+	}
+	return p
 }
 
 //Clone copy a map
-func (m *innerMap) Clone() Map {
+func (m *Map) Clone() Map {
 	v := deepCopy(m)
 	return (v).(Map)
 }
 
-func deepCopy(value interface{}) interface{} {
-	panic("todo")
-	//if valueMap, ok := value.(Map); ok {
-	//	newMap := make(Map)
-	//	for k, v := range valueMap {
-	//		newMap[k] = deepCopy(v)
-	//	}
-	//	return newMap
-	//} else if valueSlice, ok := value.([]Map); ok {
-	//	newSlice := make([]interface{}, len(valueSlice))
-	//	for k, v := range valueSlice {
-	//		newSlice[k] = deepCopy(v)
-	//	}
-	//	return newSlice
-	//}
-	//
-	//return value
+func deepCopy(value any) any {
+	if valueMap, ok := value.(*Map); ok {
+		newMap := newWithSetting(valueMap.setting)
+		for k, v := range valueMap.m {
+			newMap.m[k] = deepCopy(v)
+		}
+		return newMap
+	} else if valueSlice, ok := value.([]*Map); ok {
+		newSlice := make([]any, len(valueSlice))
+		for k, v := range valueSlice {
+			newSlice[k] = deepCopy(v)
+		}
+		return newSlice
+	}
+
+	return value
 }
 
 //Range range all maps
-func (m *innerMap) Range(f func(key interface{}, value interface{}) bool) {
-	for k, v := range m.data {
+func (m *Map) Range(f func(key string, value any) bool) {
+	for k, v := range m.m {
 		if !f(k, v) {
 			return
 		}
@@ -582,7 +545,7 @@ func (m *innerMap) Range(f func(key interface{}, value interface{}) bool) {
 //Check check all input keys
 //return -1 if all is exist
 //return index when not found
-func (m *innerMap) Check(s ...interface{}) int {
+func (m *Map) Check(s ...string) int {
 	size := len(s)
 	for i := 0; i < size; i++ {
 		if !m.Has(s[i]) {
@@ -592,22 +555,22 @@ func (m *innerMap) Check(s ...interface{}) int {
 	return -1
 }
 
-// ToGoMap trans return a map[string]interface from Map
-func (m *innerMap) ToGoMap() map[interface{}]interface{} {
-	return m.data
+// GoMap trans return a map[string]interface from Map
+func (m *Map) GoMap() map[string]any {
+	return m.m
 }
 
-// ToMap implements MapAble by self
-func (m *innerMap) ToMap() Map {
+// Map implements MapAble by self
+func (m *Map) Map() *Map {
 	return m
 }
 
 //ToEncodeURL transfer map to url encode
-func (m *innerMap) ToEncodeURL() string {
+func (m *Map) ToEncodeURL() string {
 	var buf strings.Builder
 	keys := m.SortKeys()
 	size := len(keys)
-	var tmp interface{}
+	var tmp any
 	for i := 0; i < size; i++ {
 		tmp = m.get(keys[i])
 		keyEscaped := url.QueryEscape(keys[i])
@@ -633,5 +596,3 @@ func (m *innerMap) ToEncodeURL() string {
 
 	return buf.String()
 }
-
-var _ Map = (*innerMap)(nil)
